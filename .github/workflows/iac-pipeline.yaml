@@ -1,0 +1,323 @@
+name: Terraform CI/CD Pipeline to deploy EKS infrastructure 
+
+on:
+  push:
+    branches:
+      - infra
+    paths:
+        - 'infra/**'
+  
+  pull_request:
+    branches:
+      - main      
+    paths:
+        - 'infra/**'
+
+env:
+  TF_LOG: INFO
+  TF_LOG_PATH: terraform.log
+  TF_VERSION: 1.13.3 
+  TF_WORKING_DIR: ./infra
+  AWS_REGION: us-east-1
+
+ 
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+
+#####################################
+  #  Format/Lint & Validation
+#####################################
+  format-validate-lint:
+    runs-on: ubuntu-latest
+    name: 'Format, Lint & Validation'
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - name: Checkout code
+        id: checkout
+        uses: actions/checkout@v2      
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=false
+
+      - name: Terraform fmt
+        id: fmt
+        run: terraform fmt -check
+        continue-on-error: true
+     
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+        
+     
+      - name: Terraform lint
+        id: tflint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          version: latest
+          cache: true
+          
+      - name: show tflint version
+        id: tflint-version
+        run: tflint --version
+
+      - name: Initialize TFLint (install plugins)
+        id: tflint-init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      
+      - name: Run TFLint
+        id: tflint-run
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: tflint --format compact
+        continue-on-error: true
+      
+      - name: Upload TFLint Report
+        uses: actions/upload-artifact@v4 
+        with:
+          name: tflint-report-${{ github.sha }}  
+          path: ${{ env.TF_WORKING_DIR }}/tflint-report.json  
+          if-no-files-found: warn
+  
+      - name: Cache TFLint plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.tflint.d/plugins
+          key: ${{ runner.os }}-tflint-${{ hashFiles('infrastructure/.tflint.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-tflint-
+  
+#####################################
+  # Security Scans
+#####################################
+  Security-Scan:
+    runs-on: ubuntu-latest
+    name: 'Security Scanning' 
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run tfsec Security Scanner
+        id: tfsec-scan
+        uses:  aquasecurity/tfsec-action@v1.0.0       
+        with:
+           sarif_file: tfsec.sarif
+           soft_fail: true
+           github_token: ${{ secrets.GITHUB_TOKEN }}      
+   
+      - name: tfsec PR Commenter
+        uses: tfsec/tfsec-pr-commenter-action@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: run checkov scan
+        id: checkov-scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          output_format: 'json'          
+          output_file_path: 'checkov-report.json'
+          quiet: 'false'
+          soft_fail: true
+
+
+
+#####################################
+  # policy enforcement 
+#####################################
+  policy-and-compliance:
+    runs-on: ubuntu-latest
+    name: 'Policy and Compliance'
+    needs: format-validate-lint
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: GitHubActions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=true -input=false
+        
+      - name: Terraform Plan
+        id: plan
+        run: |
+         terraform plan  -out=tfplan  -no-color -input=false -lock-timeout=300s
+         terraform show -no-color tfplan > tfplan.json
+        continue-on-error: false
+    
+      - name: Upload Terraform Plan Output
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: ${{ env.TF_WORKING_DIR }}/tfplan.json
+          retention-days: 5
+
+      
+      - name: Comment Terraform Plan on PR       
+        if: github.event_name == 'pull_request'        
+        uses: marocchino/sticky-pull-request-comment@v2        
+        with:
+          header: terraform plan result
+          message: |
+            ```terraform
+            ${{ steps.show.outputs.stdout }}
+            ```
+      
+      - name: download Opa
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
+      
+      - name: validate rego syntax
+        run: opa check policies/
+
+      - name: Run OPA tests
+        run: opa test policies/ --verbose
+
+      # - name: Generate Policy Documentation
+      #   if: github.ref == 'refs/heads/main'
+      #   run: |
+      #     mkdir -p docs
+      #     for f in policies/**/*.rego; do
+      #       echo "# $(basename ${f%.*})" >> docs/policies.md
+      #       echo '```rego' >> docs/policies.md
+      #       cat $f >> docs/policies.md
+      #       echo '```' >> docs/policies.md
+      #       echo "" >> docs/policies.md
+      #     done
+     
+
+#####################################
+  # Unit Testing  
+#####################################
+  unit-and-integration-testing:
+    runs-on: ubuntu-latest
+    name: 'Unit Testing'
+    needs: format-validate-lint    
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:  
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=false          
+       
+
+      - name: Run Terraform Native Tests
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init -backend=false
+          terraform test
+        continue-on-error: true
+    
+  
+#####################################
+  #  Review and manual approval
+#####################################
+  manual-approval:
+    runs-on: ubuntu-latest
+    name: 'Manual Approval'
+    needs: 
+      - policy-and-compliance
+      - unit-and-integration-testing
+    if: success()
+
+    permissions:
+      issues: write
+    steps:
+    
+    - name: Await Manual Approval
+      uses: trstringer/manual-approval@v1
+      with:
+        secret: ${{ github.TOKEN }}
+        approvers: kodcapsule
+        minimum-approvals: 1
+        issue-title: "Deploying v1.3.5 to prod from staging"
+        issue-body: "Please approve or deny the deployment of version v1.3.5."
+        exclude-workflow-initiator-as-approver: false
+        
+      
+        
+  
+
+# #####################################
+#   # Deployment infrastructure
+# #####################################
+
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    name: 'Terraform Apply'
+    needs: manual-approval    
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:      
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5.1.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE }}
+          role-session-name: GitHubActions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=true -input=false
+
+      - name: Generate Terraform Plan
+        id: plan
+        run: terraform plan -out=tfplan -no-color -input=false -lock-timeout=300s
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Apply
+        id: apply
+        run: terraform apply -auto-approve -input=false -lock-timeout=300s tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+      
