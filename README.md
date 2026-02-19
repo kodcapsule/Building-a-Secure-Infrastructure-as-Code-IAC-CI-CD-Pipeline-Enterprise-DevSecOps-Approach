@@ -1,4 +1,4 @@
-# Building a Secure Infrastructure as Code (IAC) CI/CD Pipeline: Enterprise DevSecOps Approach
+# Building a Secure Infrastructure as Code IAC CI/CD Pipeline: Enterprise DevSecOps Approach
 ## Introduction 
 
 
@@ -21,16 +21,17 @@ A reliable and secure IaC pipeline always starts locally before code reaches rem
 
  Implementig these local checks, ensures that  security and quality issues are caught early and making the entire IaC pipeline safer, faster, and more reliable
  
-## AUTHENTICATION (CONFIGURE OICD for AWS)
-In this step, you will configure OpenID Connect (OIDC) authentication by setting up GitHub as the OpenID provider and integrating it with Amazon Web Services. This enables GitHub Actions to securely authenticate to AWS using short-lived credentials, eliminating the need for long-lived access keys.
+## AUTHENTICATION: CONFIGURE OpenID Connect (OIDC) for AWS
+In this step, you will configure OpenID Connect (OIDC) authentication by setting up GitHub as the OpenID provider and integrating it with AWS. This enables GitHub Actions to securely authenticate to AWS using short-lived credentials, which is the best practices.
 
-Refer to this article, [Stop Storing AWS Access Keys in GitHub Secrets](https://github.com/kodcapsule/Zero-Trust-CI-CD-Using-OIDC-to-Authenticate-GitHub-Actions-to-AWS)
+Refer to this article, [Stop Storing AWS Access Keys in GitHub Secrets — Use OIDC Instead to Authenticate GitHub Actions to AWS](https://github.com/kodcapsule/Zero-Trust-CI-CD-Using-OIDC-to-Authenticate-GitHub-Actions-to-AWS)
 , for a complete step-by-step process for setting up OIDC.
 
 ## CONFIGURE REMOTE BACKEND / STATE MANAGEMENT
   Make sure your have Installed and Configure AWS CLI  and Terraform 
 ###  Using AWS CLI to create S3 state bucket
 Create S3 bucket using the AWS CLI with the bellow commands:
+
 **Step 1** Create the S3 Bucket
 ```bash
 aws s3api create-bucket \
@@ -69,35 +70,38 @@ aws s3api put-public-access-block \
 ```bash
 aws s3 ls s3://<UIQUE_S3_BUCKET_NAME>/global/s3/
 ```
-
-###  Using Terraform to  create S3 bucket
-Alternatively you can create the S3 bucket using IaC.
-
-**Step 1.** Create s3-backend.tf file
-```bash
-    touch infra/s3-backend/s3-backend.tf
-```
-
-
-**Step 2**  Create bucket
-```bash
- terraform init
- terraform fmt
- terrafrom validate
- teraform plan
- terraform apply
-```
-**Step 3**  Verify that the backet has been created succesfull
+Alternatively you can run this script `infra/create_s3_bucket.sh` to create the bucket
 
 ### Create backend
 **Step 1**  create backend.tf file
 ```bash
-touch backend.tf
+touch infra/backend.tf
 ```
 **Step 2**  Update the  backend
 
+```bash
+# infra/backend.tf
 
+terraform {
+  backend "s3" {
+    bucket         = "remote-state-bucket-kodecapsule-for-eks-102"
+    key            = "dev/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    use_lockfile   = true
+  
 
+  }
 
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+```
 ## CI/CD PIPELINE SETUP (GITHUB ACTIONS)
  
