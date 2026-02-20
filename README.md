@@ -104,4 +104,14 @@ terraform {
 }
 ```
 ## CI/CD PIPELINE SETUP (GITHUB ACTIONS)
+This is the major step in this project. We will setup the CI/CD pipeline using GitHub Actions to automate the validation, security scanning, testing, and deployment of the IaC code. 
+
+### Setting up of Gitleaks
+
+
+GitHub Actions will execute a series of defined workflows whenever code is pushed or a pull request is created, ensuring that all security checks, compliance policies, and quality gates are enforced before deployment to Amazon Web Services.
+
+This automated pipeline helps ensure consistent, secure, and reliable infrastructure deployments across development, staging, and production environments.
+
+
  
