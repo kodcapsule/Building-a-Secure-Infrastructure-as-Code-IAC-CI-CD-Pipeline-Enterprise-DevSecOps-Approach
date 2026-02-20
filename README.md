@@ -107,11 +107,29 @@ terraform {
 This is the major step in this project. We will setup the CI/CD pipeline using GitHub Actions to automate the validation, security scanning, testing, and deployment of the IaC code. 
 
 ### Setting up of Gitleaks
+The first workflow is the Secrets Scanning workflow. This worflow uses `Gitleaks` to scan the repository for hardcoded secrets like passwords, API keys, and tokens. 
+This helps prevent sensitive information from being committed to the repository and exposed in the CI/CD pipeline.
 
+Below is the workflow configuration:
+```bash
+name: Scan hardcoded secrets with Gitleaks
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *" # run once a day at 4 AM
+jobs:
+  scan:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          
+```
 
-GitHub Actions will execute a series of defined workflows whenever code is pushed or a pull request is created, ensuring that all security checks, compliance policies, and quality gates are enforced before deployment to Amazon Web Services.
-
-This automated pipeline helps ensure consistent, secure, and reliable infrastructure deployments across development, staging, and production environments.
-
-
- 
+ ### Setting up main IaC Workflow
