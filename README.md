@@ -133,3 +133,10 @@ jobs:
 ```
 
  ### Setting up main IaC Workflow
+
+The main IaC workflow consists of the following stages:
+ **Stage 1** Formatting, Linting, and Validation
+ **Stage 2** Static Code Analysis (SAST)
+ **Stage 3** Dependency/Module Scanning
+
+ Stages 1 to 3 all run in parallel to improve the speed and efficiency of the pipeline.

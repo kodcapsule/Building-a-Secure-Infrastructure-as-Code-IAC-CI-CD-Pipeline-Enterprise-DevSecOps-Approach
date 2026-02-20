@@ -5,7 +5,7 @@ on:
     branches:
       - infra
     paths:
-        - 'infra/**'
+        - 'infra/**'  
   
   pull_request:
     branches:
@@ -32,9 +32,9 @@ jobs:
 #####################################
   #  Format/Lint & Validation
 #####################################
-  format-validate-lint:
+  formatting-validate-linting:
     runs-on: ubuntu-latest
-    name: 'Format, Lint & Validation'
+    name: 'Formatting, Linting, and Validation'
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -59,8 +59,7 @@ jobs:
      
       - name: Terraform Validate
         id: validate
-        run: terraform validate -no-color
-        
+        run: terraform validate -no-color        
      
       - name: Terraform lint
         id: tflint
@@ -101,12 +100,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tflint-
   
-#####################################
-  # Security Scans
-#####################################
+############################################################################
+  # Static Code Analysis (SAST) and Dependency/Module Scanning
+#############################################################################
   Security-Scan:
     runs-on: ubuntu-latest
-    name: 'Security Scanning' 
+    name: 'Static Code Analysis and Dependency/Module Scanning' 
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -137,6 +136,13 @@ jobs:
           output_file_path: 'checkov-report.json'
           quiet: 'false'
           soft_fail: true
+      - name: Run Snyk to check for vulnerable Terraform modules
+        id: snyk-scan
+        uses: snyk/actions/terraform@master
+        with:
+          args: --json-file-output=snyk-report.json
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
 
 
@@ -146,7 +152,7 @@ jobs:
   policy-and-compliance:
     runs-on: ubuntu-latest
     name: 'Policy and Compliance'
-    needs: format-validate-lint
+    needs: formatting-validate-linting
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -225,7 +231,7 @@ jobs:
   unit-and-integration-testing:
     runs-on: ubuntu-latest
     name: 'Unit Testing'
-    needs: format-validate-lint    
+    needs: formatting-validate-linting   
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
