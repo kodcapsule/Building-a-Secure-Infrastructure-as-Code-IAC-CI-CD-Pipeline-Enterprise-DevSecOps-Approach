@@ -142,7 +142,7 @@ jobs:
           soft_fail: true
       - name: Run Snyk to check for vulnerable Terraform modules
         id: snyk-scan
-        uses: snyk/actions/terraform@master
+        uses: snyk/actions/iac@master
         with:
           args: --json-file-output=snyk-report.json
         env:

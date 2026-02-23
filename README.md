@@ -79,7 +79,7 @@ Alternatively you can run this script `infra/create_s3_bucket.sh` to create the 
 
 ![S3 State Bucket](./Images/Bucket.png)
 
-### Create backend
+### Create the Remote backend
 **Step 1**  create backend.tf file
 ```bash
 touch infra/backend.tf
