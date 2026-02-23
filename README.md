@@ -117,6 +117,7 @@ This is the major step in this project. We will setup the CI/CD pipeline using G
 The first workflow is the Secrets Scanning workflow. This worflow uses `Gitleaks` to scan the repository for hardcoded secrets like passwords, API keys, and tokens. 
 This helps prevent sensitive information from being committed to the repository and exposed in the CI/CD pipeline.
 
+
 Below is the workflow configuration:
 ```bash
 name: Scan hardcoded secrets with Gitleaks
@@ -136,7 +137,8 @@ jobs:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}     
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Only required for Organizations, not personal accounts.     
 ```
 
  ### Setting up main IaC Workflow
