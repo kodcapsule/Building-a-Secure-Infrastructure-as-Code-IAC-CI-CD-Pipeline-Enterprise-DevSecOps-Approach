@@ -1,6 +1,10 @@
 name: Terraform CI/CD Pipeline to deploy EKS infrastructure 
 
 on:
+  workflow_run: # Triggered when manually triggered from the Actions tab
+    workflows: ["Scan hardcoded secrets with Gitleaks"] # Name of the workflow that
+    types:
+      - completed
   push:
     branches:
       - infra

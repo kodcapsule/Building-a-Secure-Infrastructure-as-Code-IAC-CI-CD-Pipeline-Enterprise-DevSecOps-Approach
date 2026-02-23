@@ -1,5 +1,9 @@
 # Building a Secure Infrastructure as Code IAC CI/CD Pipeline: Enterprise DevSecOps Approach
+
+![IAC Pipeline](./Images/IAC.gif)
+
 ## Introduction 
+
 
 
 ## Prerequisites for IaC CI/CD Pipeline
@@ -71,6 +75,9 @@ aws s3api put-public-access-block \
 aws s3 ls s3://<UIQUE_S3_BUCKET_NAME>/global/s3/
 ```
 Alternatively you can run this script `infra/create_s3_bucket.sh` to create the bucket
+
+
+![S3 State Bucket](./Images/Bucket.png)
 
 ### Create backend
 **Step 1**  create backend.tf file
