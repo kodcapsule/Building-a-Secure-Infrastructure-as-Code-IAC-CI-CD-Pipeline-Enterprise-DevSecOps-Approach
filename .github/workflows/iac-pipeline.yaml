@@ -166,7 +166,7 @@ jobs:
   policy-and-compliance:
     runs-on: ubuntu-latest
     name: ' Policy Enforcement, Drift Detection, and Cost Estimation'
-    needs: formatting-validate-linting
+    needs: [formatting-validate-linting, Security-Scan]
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -196,14 +196,19 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
+          set +e
           terraform plan \
             -out=tfplan \
             -no-color \
             -input=false \
-            -lock-timeout=300s
+            -lock-timeout=300s \
+            -detailed-exitcode 
+          echo "exitcode=$?" >> $GITHUB_OUTPUT
+          set -e
         continue-on-error: false
 
-      - name: Convert Plan to JSON
+      - name: Convert Plan to JSON     
+        if: steps.plan.outputs.exitcode == '2'
         id: plan-json
         run: |
           terraform show -no-color -json tfplan > tfplan.json
@@ -279,7 +284,7 @@ jobs:
   unit-and-integration-testing:
     runs-on: ubuntu-latest
     name: 'Unit Testing'
-    needs: formatting-validate-linting   
+    needs: [formatting-validate-linting, Security-Scan] 
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
