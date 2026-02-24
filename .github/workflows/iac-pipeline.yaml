@@ -195,17 +195,16 @@ jobs:
       - name: Detect Infrastructure Drift
         id: drift
         run: |
-          echo "Running drift detection..."
-          DRIFT_OUTPUT=$(terraform plan -detailed-exitcode -no-color -input=false 2>&1) || DRIFT_EXIT=$?
-          case $DRIFT_EXIT in
-            0) echo "drift_detected=false" >> $GITHUB_OUTPUT
-               echo "::notice::No drift detected. Infrastructure matches desired state." ;;
-            1) echo "::error::Terraform plan failed during drift detection."
-               exit 1 ;;
-            2) echo "drift_detected=true" >> $GITHUB_OUTPUT
-               echo "::warning::Drift detected! Infrastructure has diverged from desired state."
-               echo "$DRIFT_OUTPUT" > drift-report.txt ;;      
+          terraform plan -detailed-exitcode -no-color -input=false -lock-timeout=300s -out=tfplan
         continue-on-error: true
+
+      - name: Check Drift Status
+        run: |
+          if [ "${{ steps.drift.outcome }}" == "failure" ]; then
+          echo " Drift detected in infrastructure"
+          else
+          echo " No drift detected"
+          fi
         
       # - name: Terraform Plan
       #   id: plan
