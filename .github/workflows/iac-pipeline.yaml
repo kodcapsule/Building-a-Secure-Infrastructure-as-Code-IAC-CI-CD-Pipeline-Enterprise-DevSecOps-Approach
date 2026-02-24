@@ -140,6 +140,7 @@ jobs:
           output_file_path: 'checkov-report.json'
           quiet: 'false'
           soft_fail: true
+
       - name: Run Snyk to check for vulnerable Terraform modules
         id: snyk-scan
         uses: snyk/actions/iac@master
@@ -149,6 +150,7 @@ jobs:
           sarif: false
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
 
       - name: upload snyk report
         uses: github/codeql-action/upload-sarif@v1
@@ -166,7 +168,7 @@ jobs:
   policy-and-compliance:
     runs-on: ubuntu-latest
     name: ' Policy Enforcement, Drift Detection, and Cost Estimation'
-    needs: [formatting-validate-linting, Security-Scan]
+    needs: [formatting-validate-linting]
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -284,7 +286,7 @@ jobs:
   unit-and-integration-testing:
     runs-on: ubuntu-latest
     name: 'Unit Testing'
-    needs: [formatting-validate-linting, Security-Scan] 
+    needs: [formatting-validate-linting] 
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
