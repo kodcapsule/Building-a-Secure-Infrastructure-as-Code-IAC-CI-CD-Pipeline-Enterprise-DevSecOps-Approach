@@ -1,6 +1,6 @@
 package terraform.security
 
-deny[msg] {
+deny[msg] if {
   input.resource_changes[_].change.after.public == true
-  msg = "Public resource is not allowed"
+  msg := "Public resource is not allowed"
 }

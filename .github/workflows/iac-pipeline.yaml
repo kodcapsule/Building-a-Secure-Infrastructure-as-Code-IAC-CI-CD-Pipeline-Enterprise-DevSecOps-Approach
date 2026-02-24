@@ -282,6 +282,9 @@ jobs:
             --verbose \
             --format pretty 2>&1 | tee opa-unit-test-results.txt
 
+
+            
+
       # - name: Generate Policy Documentation
       #   if: github.ref == 'refs/heads/main'
       #  opa test policies/ --verbose
