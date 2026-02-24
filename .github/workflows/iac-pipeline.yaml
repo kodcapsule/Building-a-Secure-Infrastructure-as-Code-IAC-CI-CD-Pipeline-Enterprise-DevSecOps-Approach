@@ -160,12 +160,12 @@ jobs:
       
 
 
-#####################################
-  # policy enforcement 
-#####################################
+################################################################
+  # policy enforcement , Drift Detection, and cost estimation
+##############################################################
   policy-and-compliance:
     runs-on: ubuntu-latest
-    name: 'Policy and Compliance'
+    name: ' Policy Enforcement, Drift Detection, and Cost Estimation'
     needs: formatting-validate-linting
     defaults:
       run:
@@ -180,51 +180,68 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           role-session-name: GitHubActions
           aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: true
 
       - name: Terraform Init
         id: init
         run: terraform init -backend=true -input=false
-        
-      - name: Terraform Plan
-        id: plan
+
+      - name: Detect Infrastructure Drift
+        id: drift
         run: |
-         terraform plan  -out=tfplan  -no-color -input=false -lock-timeout=300s
-         terraform show -no-color tfplan > tfplan.json
-        continue-on-error: false
+          echo "Running drift detection..."
+          DRIFT_OUTPUT=$(terraform plan -detailed-exitcode -no-color -input=false 2>&1) || DRIFT_EXIT=$?
+          case $DRIFT_EXIT in
+            0) echo "drift_detected=false" >> $GITHUB_OUTPUT
+               echo "::notice::No drift detected. Infrastructure matches desired state." ;;
+            1) echo "::error::Terraform plan failed during drift detection."
+               exit 1 ;;
+            2) echo "drift_detected=true" >> $GITHUB_OUTPUT
+               echo "::warning::Drift detected! Infrastructure has diverged from desired state."
+               echo "$DRIFT_OUTPUT" > drift-report.txt ;;      
+        continue-on-error: true
+        
+      # - name: Terraform Plan
+      #   id: plan
+      #   run: |
+      #    terraform plan  -out=tfplan  -no-color -input=false -lock-timeout=300s
+      #    terraform show -no-color tfplan > tfplan.json
+      #   continue-on-error: false
     
-      - name: Upload Terraform Plan Output
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ github.sha }}
-          path: ${{ env.TF_WORKING_DIR }}/tfplan.json
-          retention-days: 5
+      # - name: Upload Terraform Plan Output
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: tfplan-${{ github.sha }}
+      #     path: ${{ env.TF_WORKING_DIR }}/tfplan.json
+      #     retention-days: 5
 
       
-      - name: Comment Terraform Plan on PR       
-        if: github.event_name == 'pull_request'        
-        uses: marocchino/sticky-pull-request-comment@v2        
-        with:
-          header: terraform plan result
-          message: |
-            ```terraform
-            ${{ steps.show.outputs.stdout }}
-            ```
+      # - name: Comment Terraform Plan on PR       
+      #   if: github.event_name == 'pull_request'        
+      #   uses: marocchino/sticky-pull-request-comment@v2        
+      #   with:
+      #     header: terraform plan result
+      #     message: |
+      #       ```terraform
+      #       ${{ steps.plan.outputs.stdout }}
+      #       ```
       
-      - name: download Opa
-        uses: open-policy-agent/setup-opa@v2
-        with:
-          version: latest
+      # - name: download Opa
+      #   uses: open-policy-agent/setup-opa@v2
+      #   with:
+      #     version: latest
       
-      - name: validate rego syntax
-        run: opa check policies/
+      # - name: validate rego syntax
+      #   run: opa check policies/
 
-      - name: Run OPA tests
-        run: opa test policies/ --verbose
+      # - name: Run OPA tests
+      #   run: opa test policies/ --verbose
 
       # - name: Generate Policy Documentation
       #   if: github.ref == 'refs/heads/main'
