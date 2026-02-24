@@ -220,6 +220,17 @@ jobs:
           echo "resources_to_change=$(cat tfplan.json | jq '[.resource_changes[] | select(.change.actions[] == "update")] | length')" >> $GITHUB_OUTPUT
           echo "resources_to_destroy=$(cat tfplan.json | jq '[.resource_changes[] | select(.change.actions[] == "delete")] | length')" >> $GITHUB_OUTPUT
 
+      - name: Upload Terraform Plan Output
+        if: steps.plan-json.outcome == 'success' && steps.plan-json.conclusion == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.sha }}
+          path: |
+            ${{ env.TF_WORKING_DIR }}/tfplan
+            ${{ env.TF_WORKING_DIR }}/tfplan.json
+            ${{ env.TF_WORKING_DIR }}/tfplan.txt
+          retention-days: 5
+
       - name: Detect Infrastructure Drift
         id: drift
         run: |
@@ -230,20 +241,13 @@ jobs:
         run: |
           if [ "${{ steps.drift.outcome }}" == "failure" ]; then
           echo " Drift detected in infrastructure"
+          echo "::warning::Drift detected! Infrastructure has diverged from desired state."
           else
           echo " No drift detected"
           echo "::notice::No drift detected. Infrastructure matches desired state."
           fi
-
-        
-      
-    
-      # - name: Upload Terraform Plan Output
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: tfplan-${{ github.sha }}
-      #     path: ${{ env.TF_WORKING_DIR }}/tfplan.json
-      #     retention-days: 5
+             
+         
 
       
       # - name: Comment Terraform Plan on PR       
@@ -256,19 +260,31 @@ jobs:
       #       ${{ steps.plan.outputs.stdout }}
       #       ```
       
-      # - name: download Opa
-      #   uses: open-policy-agent/setup-opa@v2
-      #   with:
-      #     version: latest
-      
-      # - name: validate rego syntax
-      #   run: opa check policies/
+      - name: Setup Open Policy Agent (Opa)
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: latest
 
-      # - name: Run OPA tests
-      #   run: opa test policies/ --verbose
+      - name: Validate Rego Syntax
+        id: opa-syntax
+        run: |
+          echo "Validating OPA policy syntax..."
+          opa check policies/ --format pretty
+          echo "::notice::All Rego policies passed syntax validation."
+      
+
+      - name: Run OPA tests
+        id: opa-tests
+        run: | 
+          echo "Running OPA unit tests..."
+         
+          opa test policies/ \
+            --verbose \
+            --format pretty 2>&1 | tee opa-unit-test-results.txt
 
       # - name: Generate Policy Documentation
       #   if: github.ref == 'refs/heads/main'
+      #  opa test policies/ --verbose
       #   run: |
       #     mkdir -p docs
       #     for f in policies/**/*.rego; do
