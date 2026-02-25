@@ -14,6 +14,11 @@ resource "aws_s3_bucket_versioning" "tf-state-bucket-versioning" {
 
 }
 
+resource "aws_s3_bucket_logging" "tf-state-bucket-logging" {
+  bucket = aws_s3_bucket.tf-state-bucket.id
+  target_bucket = aws_s3_bucket.tf-state-bucket.id
+  target_prefix = "logs/"
+}
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "tf-state-bucket-encryption" {
   bucket = aws_s3_bucket.tf-state-bucket.id

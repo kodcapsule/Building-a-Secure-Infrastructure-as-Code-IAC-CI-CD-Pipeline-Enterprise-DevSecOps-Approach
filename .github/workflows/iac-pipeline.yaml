@@ -282,6 +282,16 @@ jobs:
             --verbose \
             --format pretty 2>&1 | tee opa-unit-test-results.txt
 
+      - name: OPA Evaluation
+        if: steps.plan-json.outcome == 'success' && steps.plan-json.conclusion == 'success'
+        id: opa-eval
+        run: |
+          echo "Evaluating OPA policies against Terraform plan..." 
+          opa eval \
+          -i tfplan.json \
+          -d policies \
+          "data" \
+          --format pretty
 
             
 
